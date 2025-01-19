@@ -1,52 +1,47 @@
 'use client'
 
-import React, { useState, useMemo, useCallback } from 'react'
+import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import debounce from 'lodash.debounce'
+import Papa from 'papaparse'
 import { Input } from "@/components/ui/input"
 import { ChevronDown, ChevronUp, ChevronsUpDown, Loader2 } from 'lucide-react'
 
 interface DataItem {
   Domain: string
-  Niche1: string
-  Niche2: string
+  "Niche 1": string
+  "Niche 2": string
   Traffic: string
   DR: string
   DA: string
   Language: string
   Price: string
-  SpamScore: string
+  "Spam Score": string
 }
-
-// Generate large dataset for testing
-const generateLargeDataset = (count: number): DataItem[] => {
-  const baseData = [
-    { Domain: 'zzoomit.com', Niche1: 'Business', Niche2: 'General', Traffic: '164', DR: '50', DA: '61', Language: 'English', Price: '$19.95', SpamScore: '9%' },
-    { Domain: 'zzatem.com', Niche1: 'All', Niche2: 'Niches', Traffic: '10,775', DR: '38', DA: '28', Language: 'English', Price: '$39.90', SpamScore: '9%' },
-    { Domain: 'zyynor.com', Niche1: 'Business', Niche2: 'General', Traffic: 'Not provided', DR: '43', DA: '31', Language: 'English', Price: '$19.95', SpamScore: '1%' },
-    { Domain: 'zywaz.com', Niche1: 'Business', Niche2: 'Finance', Traffic: 'Not provided', DR: '61', DA: '36', Language: 'English', Price: '$19.95', SpamScore: '1%' },
-    { Domain: 'zyusepedia.com', Niche1: 'Technology', Niche2: '', Traffic: '172', DR: '19', DA: '37', Language: 'English', Price: '$19.95', SpamScore: '1%' }
-  ]
-
-  const result: DataItem[] = []
-  for (let i = 0; i < count; i++) {
-    const baseDomain = baseData[i % baseData.length]
-    result.push({
-      ...baseDomain,
-      Domain: `${baseDomain.Domain.split('.')[0]}-${i}.com`
-    })
-  }
-  return result
-}
-
-const INITIAL_DATA = generateLargeDataset(10000)
 
 export default function DataTable() {
-  const [data] = useState<DataItem[]>(INITIAL_DATA)
+  const [data, setData] = useState<DataItem[]>([])
   const [sortColumn, setSortColumn] = useState<keyof DataItem>('Domain')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   const [filterText, setFilterText] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await fetch('/data.csv')
+        const csvData = await response.text()
+        const results = Papa.parse(csvData, { header: true, skipEmptyLines: true })
+        setData(results.data as DataItem[])
+        setIsLoading(false)
+      } catch (error) {
+        console.error('Error reading CSV file:', error)
+        setIsLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [])
 
   // Debounced filter handler
   const debouncedFilter = useCallback(
@@ -55,19 +50,21 @@ export default function DataTable() {
       setFilterText(value)
       setTimeout(() => setIsLoading(false), 300)
     }, 300),
-    [setIsLoading, setFilterText]
+    []
   )
 
   // Memoized filtered and sorted data
   const processedData = useMemo(() => {
     const filtered = data.filter(item =>
-      item.Domain.toLowerCase().includes(filterText.toLowerCase())
+      Object.values(item).some(value => 
+        value.toLowerCase().includes(filterText.toLowerCase())
+      )
     )
 
     return [...filtered].sort((a, b) => {
       const aValue = a[sortColumn]
       const bValue = b[sortColumn]
-
+      
       if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1
       if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1
       return 0
@@ -99,13 +96,22 @@ export default function DataTable() {
     return <ChevronsUpDown className="w-4 h-4 opacity-0 group-hover:opacity-100" />
   }
 
+  if (isLoading && data.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="w-8 h-8 animate-spin" />
+        <span className="ml-2">Loading data...</span>
+      </div>
+    )
+  }
+
   return (
     <div className="container mx-auto p-4 space-y-4">
       <div className="flex items-center justify-between gap-4">
         <div className="flex-1 max-w-sm relative">
           <Input
             type="text"
-            placeholder="Filter by Domain Name"
+            placeholder="Filter data"
             onChange={(e) => debouncedFilter(e.target.value)}
             className="pr-8"
           />
@@ -163,14 +169,14 @@ export default function DataTable() {
                     }}
                   >
                     <div className="p-3 truncate">{item.Domain}</div>
-                    <div className="p-3 truncate">{item.Niche1}</div>
-                    <div className="p-3 truncate">{item.Niche2}</div>
+                    <div className="p-3 truncate">{item["Niche 1"]}</div>
+                    <div className="p-3 truncate">{item["Niche 2"]}</div>
                     <div className="p-3 truncate">{item.Traffic}</div>
                     <div className="p-3 truncate">{item.DR}</div>
                     <div className="p-3 truncate">{item.DA}</div>
                     <div className="p-3 truncate">{item.Language}</div>
                     <div className="p-3 truncate">{item.Price}</div>
-                    <div className="p-3 truncate">{item.SpamScore}</div>
+                    <div className="p-3 truncate">{item["Spam Score"]}</div>
                   </div>
                 )
               })}
