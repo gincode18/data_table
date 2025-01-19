@@ -1,12 +1,16 @@
 import { Button } from "@/components/ui/button"
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useVirtualizer } from '@tanstack/react-virtual'
 import debounce from 'lodash.debounce'
-import { ChevronDown, ChevronUp, ChevronsUpDown, Filter, Loader2, X } from "lucide-react"
+import { ChevronDown, ChevronUp, ChevronsUpDown, Copy, Filter, Loader2, X } from 'lucide-react'
 import Papa from 'papaparse'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+
+import { useToast } from "@/hooks/use-toast"
 
 interface DataItem {
   Domain: string
@@ -34,6 +38,9 @@ export default function DataTable() {
   const [filterText, setFilterText] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [filters, setFilters] = useState<FilterConfig>({})
+  const [selectedRows, setSelectedRows] = useState<number[]>([])
+
+  const { toast } = useToast()
 
   useEffect(() => {
     const fetchData = async () => {
@@ -63,12 +70,11 @@ export default function DataTable() {
 
   const processedData = useMemo(() => {
     let filtered = data.filter(item =>
-      Object.values(item).some(value => 
+      Object.values(item).some(value =>
         value.toLowerCase().includes(filterText.toLowerCase())
       )
     )
 
-    // Apply advanced filters
     filtered = filtered.filter(item => {
       return Object.entries(filters).every(([key, config]) => {
         if (!config) return true
@@ -91,7 +97,7 @@ export default function DataTable() {
     return [...filtered].sort((a, b) => {
       const aValue = a[sortColumn]
       const bValue = b[sortColumn]
-      
+
       if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1
       if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1
       return 0
@@ -138,6 +144,29 @@ export default function DataTable() {
     })
   }
 
+  const handleRowSelection = (index: number) => {
+    setSelectedRows(prev => {
+      if (prev.includes(index)) {
+        return prev.filter(i => i !== index)
+      } else {
+        return [...prev, index]
+      }
+    })
+  }
+
+  const copyRowsToClipboard = (indices: number[]) => {
+    const rowsToCopy = indices.map(index => processedData[index])
+    const csvContent = Papa.unparse(rowsToCopy)
+    navigator.clipboard.writeText(csvContent).then(() => {
+      toast({
+        title: "Copied 🎉",
+        description: `${indices.length} row(s) copied to clipboard`,
+      })
+    }).catch(err => {
+      console.error('Failed to copy: ', err)
+    })
+  }
+
   if (isLoading && data.length === 0) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -148,146 +177,175 @@ export default function DataTable() {
   }
 
   return (
-    <div className="container mx-auto p-4 space-y-4">
-      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="w-full md:w-auto flex-1 relative">
-          <Input
-            type="text"
-            placeholder="Search all columns"
-            onChange={(e) => debouncedFilter(e.target.value)}
-            className="pr-8"
-          />
-          {isLoading && (
-            <div className="absolute right-2 top-1/2 -translate-y-1/2">
-              <Loader2 className="w-4 h-4 animate-spin" />
-            </div>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">
-            {processedData.length.toLocaleString()} items
-          </span>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="h-8 border-dashed">
-                <Filter className="mr-2 h-4 w-4" />
-                Add filter
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-full">
-              <div className="grid gap-4">
-                <div className="space-y-2">
-                  <h4 className="font-medium leading-none">Filters</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Add filters to refine results
-                  </p>
-                </div>
-                <div className="grid gap-2">
-                  {Object.keys(data[0] || {}).map((column) => (
-                    <div key={column} className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor={column}>{column}</Label>
-                      <Input
-                        id={column}
-                        placeholder="Value"
-                        className="col-span-2"
-                        onChange={(e) => handleFilterChange(column as keyof DataItem, e.target.value, 'contains')}
-                      />
-                      <select
-                        onChange={(e) => handleFilterChange(column as keyof DataItem, filters[column as keyof DataItem]?.value || '', e.target.value as any)}
-                        className="p-2 border rounded"
-                      >
-                        <option value="contains">Contains</option>
-                        <option value="equals">Equals</option>
-                        <option value="greater">Greater</option>
-                        <option value="less">Less</option>
-                      </select>
-                    </div>
-                  ))}
-                </div>
+    <TooltipProvider>
+      <div className="container mx-auto p-4 space-y-4">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="w-full md:w-auto flex-1 relative">
+            <Input
+              type="text"
+              placeholder="Search all columns"
+              onChange={(e) => debouncedFilter(e.target.value)}
+              className="pr-8"
+            />
+            {isLoading && (
+              <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                <Loader2 className="w-4 h-4 animate-spin" />
               </div>
-            </PopoverContent>
-          </Popover>
-        </div>
-      </div>
-
-      {Object.entries(filters).length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-4">
-          {Object.entries(filters).map(([column, config]) => (
-            <div key={column} className="flex items-center bg-muted text-muted-foreground rounded-full px-3 py-1 text-sm">
-              <span>{column}: {config?.operator} {config?.value}</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-auto p-0 ml-2"
-                onClick={() => removeFilter(column as keyof DataItem)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="rounded-md border overflow-hidden">
-        <div className="w-full overflow-auto">
-          <div className="border-b">
-            <div className="grid grid-cols-2 md:grid-cols-9 bg-muted/50">
-              {Object.keys(data[0] || {}).map((key) => (
-                <div
-                  key={key}
-                  className="p-3 text-sm font-medium text-left cursor-pointer group hover:bg-muted/50 transition-colors"
-                  onClick={() => handleSort(key as keyof DataItem)}
-                >
-                  <div className="flex items-center gap-1">
-                    {key}
-                    {getSortIcon(key as keyof DataItem)}
-                  </div>
-                </div>
-              ))}
-            </div>
+            )}
           </div>
-
-          <div
-            ref={parentRef}
-            className="w-full overflow-auto"
-            style={{ height: '600px' }}
-          >
-            <div
-              style={{
-                height: `${rowVirtualizer.getTotalSize()}px`,
-                width: '100%',
-                position: 'relative'
-              }}
-            >
-              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                const item = processedData[virtualRow.index]
-                return (
-                  <div
-                    key={virtualRow.index}
-                    className="absolute top-0 left-0 w-full grid grid-cols-2 md:grid-cols-9 hover:bg-muted/50 transition-colors border-b"
-                    style={{
-                      height: `${virtualRow.size}px`,
-                      transform: `translateY(${virtualRow.start}px)`
-                    }}
-                  >
-                    {Object.entries(item).map(([key, value]) => (
-                      <div key={key} className="p-3 truncate">
-                        <span className="font-medium md:hidden">{key}: </span>
-                        {value}
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              {processedData.length.toLocaleString()} items
+            </span>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 border-dashed">
+                  <Filter className="mr-2 h-4 w-4" />
+                  Add filter
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-full">
+                <div className="grid gap-4">
+                  <div className="space-y-2">
+                    <h4 className="font-medium leading-none">Filters</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Add filters to refine results
+                    </p>
+                  </div>
+                  <div className="grid gap-2">
+                    {Object.keys(data[0] || {}).map((column) => (
+                      <div key={column} className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor={column}>{column}</Label>
+                        <Input
+                          id={column}
+                          placeholder="Value"
+                          className="col-span-2"
+                          onChange={(e) => handleFilterChange(column as keyof DataItem, e.target.value, 'contains')}
+                        />
+                        <select
+                          onChange={(e) => handleFilterChange(column as keyof DataItem, filters[column as keyof DataItem]?.value || '', e.target.value as any)}
+                          className="p-2 border rounded"
+                        >
+                          <option value="contains">Contains</option>
+                          <option value="equals">Equals</option>
+                          <option value="greater">Greater</option>
+                          <option value="less">Less</option>
+                        </select>
                       </div>
                     ))}
                   </div>
-                )
-              })}
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+        </div>
+
+        {Object.entries(filters).length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {Object.entries(filters).map(([column, config]) => (
+              <div key={column} className="flex items-center bg-muted text-muted-foreground rounded-full px-3 py-1 text-sm">
+                <span>{column}: {config?.operator} {config?.value}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-auto p-0 ml-2"
+                  onClick={() => removeFilter(column as keyof DataItem)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="rounded-md border overflow-hidden">
+          <div className="w-full overflow-auto">
+            <div className="border-b">
+              <div className="grid grid-cols-2 md:grid-cols-9 bg-muted/50">
+                {Object.keys(data[0] || {}).map((key) => (
+                  <div
+                    key={key}
+                    className="p-3 text-sm font-medium text-left cursor-pointer group hover:bg-muted/50 transition-colors"
+                    onClick={() => handleSort(key as keyof DataItem)}
+                  >
+                    <div className="flex items-center gap-1">
+                      {key}
+                      {getSortIcon(key as keyof DataItem)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div
+              ref={parentRef}
+              className="w-full overflow-auto"
+              style={{ height: '600px' }}
+            >
+              <div
+                style={{
+                  height: `${rowVirtualizer.getTotalSize()}px`,
+                  width: '100%',
+                  position: 'relative'
+                }}
+              >
+                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const item = processedData[virtualRow.index]
+                  const isSelected = selectedRows.includes(virtualRow.index)
+                  return (
+                    <ContextMenu key={virtualRow.index}>
+                      <ContextMenuTrigger>
+                        <div
+                          className={`absolute top-0 left-0 w-full grid grid-cols-2 md:grid-cols-9 transition-colors border-b ${isSelected ? 'bg-muted' : 'hover:bg-muted/50'}`}
+                          style={{
+                            height: `${virtualRow.size}px`,
+                            transform: `translateY(${virtualRow.start}px)`
+                          }}
+                          onClick={() => handleRowSelection(virtualRow.index)}
+                        >
+                          {Object.entries(item).map(([key, value]) => (
+                            <Tooltip key={key}>
+                              <TooltipTrigger asChild>
+                                <div className="p-3 truncate">
+                                  <span className="font-medium md:hidden">{key}: </span>
+                                  {value}
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{value}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          ))}
+                        </div>
+                      </ContextMenuTrigger>
+                      <ContextMenuContent>
+                        <ContextMenuItem onClick={() => copyRowsToClipboard([virtualRow.index])}>
+                          <Copy className="mr-2 h-4 w-4" />
+                          Copy row
+                        </ContextMenuItem>
+                      </ContextMenuContent>
+                    </ContextMenu>
+                  )
+                })}
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="text-sm text-muted-foreground text-center">
-        Scroll to load more rows
+        <div className="text-sm text-muted-foreground text-center">
+          Scroll to load more rows
+        </div>
+
+        {selectedRows.length > 0 && (
+          <div className="fixed bottom-4 right-4">
+            <Button onClick={() => copyRowsToClipboard(selectedRows)}>
+              <Copy className="mr-2 h-4 w-4" />
+              Copy {selectedRows.length} selected row(s)
+            </Button>
+          </div>
+        )}
       </div>
-    </div>
+    </TooltipProvider>
   )
 }
 
