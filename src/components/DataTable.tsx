@@ -6,7 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useVirtualizer } from '@tanstack/react-virtual'
 import debounce from 'lodash.debounce'
-import { CheckSquare, ChevronDown, ChevronUp, ChevronsUpDown, Copy, Download, Filter, Loader2, Square, X } from 'lucide-react'
+import { CheckSquare, ChevronDown, ChevronUp, ChevronsUpDown, Copy, Download, Filter, Loader2, RefreshCw, Square, X } from 'lucide-react'
 import Papa from 'papaparse'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
@@ -40,29 +40,36 @@ export default function DataTable() {
   const [isLoading, setIsLoading] = useState(true)
   const [filters, setFilters] = useState<FilterConfig>({})
   const [selectedRows, setSelectedRows] = useState<number[]>([])
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const { toast } = useToast()
 
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setIsLoading(true);
-        const sheetsData = await fetchGoogleSheetsData();
-        setData(sheetsData);
-      } catch (err) {
-        toast({
-          title: "Error",
-          description: "Failed to load data from Google Sheets",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
+  const loadData = async (forceRefresh = false) => {
+    try {
+      setIsLoading(true);
+      if (forceRefresh) {
+        setIsRefreshing(true);
+        // Clear localStorage cache
+        localStorage.removeItem('google_sheets_data');
       }
-    };
+      const sheetsData = await fetchGoogleSheetsData();
+      setData(sheetsData);
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Failed to load data from Google Sheets",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  };
 
+  useEffect(() => {
     loadData();
-  }, [toast]);
+  }, []);
 
   //offline 
   // useEffect(() => {
@@ -241,6 +248,16 @@ export default function DataTable() {
             )}
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => loadData(true)}
+              disabled={isRefreshing}
+              className="h-8"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Refresh Data
+            </Button>
             <span className="text-sm text-muted-foreground">
               {processedData.length.toLocaleString()} items
             </span>
