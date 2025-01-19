@@ -1,50 +1,52 @@
-# React + TypeScript + Vite
+# Interactive Data Table
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## Overview
 
-Currently, two official plugins are available:
+This project is a high-performance, interactive data table built with React and Next.js. It's designed to efficiently handle and display large datasets (up to 36,000 rows) with features like sorting, filtering, and virtualized scrolling. The table is optimized for performance and user experience, making it ideal for applications that need to display and interact with substantial amounts of tabular data.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Features
 
-## Expanding the ESLint configuration
+- Display large datasets (tested with 36,000 rows)
+- Fast and responsive UI
+- Sort data by clicking on column headers
+- Filter data across all columns in real-time
+- Virtualized scrolling for optimal performance
+- Responsive design for various screen sizes
+- Secure login system
+- CSV data import
 
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
+## Tech Stack
 
-- Configure the top-level `parserOptions` property like this:
+- React 18
+- TypeScript
+- Tailwind CSS
+- shadcn/ui components
+- tanstack/react-virtual for virtualization
+- Papa Parse for CSV parsing
+- Lucide React for icons
 
-```js
-export default tseslint.config({
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
-```
+## Installation
 
-- Replace `tseslint.configs.recommended` to `tseslint.configs.recommendedTypeChecked` or `tseslint.configs.strictTypeChecked`
-- Optionally add `...tseslint.configs.stylisticTypeChecked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and update the config:
+1. Clone the repository:
 
-```js
-// eslint.config.js
-import react from 'eslint-plugin-react'
 
-export default tseslint.config({
-  // Set the react version
-  settings: { react: { version: '18.3' } },
-  plugins: {
-    // Add the react plugin
-    react,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended rules
-    ...react.configs.recommended.rules,
-    ...react.configs['jsx-runtime'].rules,
-  },
-})
-```
+## Deployment to Vercel
+
+1. Ensure your CSV file is in the `public` folder of your project.
+
+2. Push your code to a GitHub repository.
+
+3. Log in to your Vercel account and click "New Project".
+
+4. Import your GitHub repository.
+
+5. In the "Build and Output Settings" section:
+   - Build Command: `npm run build` (or `yarn build` if you're using Yarn)
+   - Output Directory: `dist` (this is the default output directory for Vite)
+
+6. Click "Deploy" and wait for the deployment to complete.
+
+Your application should now be live with the CSV file accessible.
+
+Note: If you make changes to your CSV file, you'll need to redeploy your application for the changes to take effect in the production environment.
+
