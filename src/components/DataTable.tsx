@@ -1,11 +1,12 @@
-'use client'
-
-import React, { useState, useMemo, useCallback, useEffect } from 'react'
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useVirtualizer } from '@tanstack/react-virtual'
 import debounce from 'lodash.debounce'
+import { ChevronDown, ChevronUp, ChevronsUpDown, Filter, Loader2, X } from "lucide-react"
 import Papa from 'papaparse'
-import { Input } from "@/components/ui/input"
-import { ChevronDown, ChevronUp, ChevronsUpDown, Loader2 } from 'lucide-react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
 interface DataItem {
   Domain: string
@@ -19,12 +20,20 @@ interface DataItem {
   "Spam Score": string
 }
 
+type FilterConfig = {
+  [K in keyof DataItem]?: {
+    value: string;
+    operator: 'contains' | 'equals' | 'greater' | 'less';
+  };
+};
+
 export default function DataTable() {
   const [data, setData] = useState<DataItem[]>([])
   const [sortColumn, setSortColumn] = useState<keyof DataItem>('Domain')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   const [filterText, setFilterText] = useState('')
   const [isLoading, setIsLoading] = useState(true)
+  const [filters, setFilters] = useState<FilterConfig>({})
 
   useEffect(() => {
     const fetchData = async () => {
@@ -43,7 +52,6 @@ export default function DataTable() {
     fetchData()
   }, [])
 
-  // Debounced filter handler
   const debouncedFilter = useCallback(
     debounce((value: string) => {
       setIsLoading(true)
@@ -53,13 +61,32 @@ export default function DataTable() {
     []
   )
 
-  // Memoized filtered and sorted data
   const processedData = useMemo(() => {
-    const filtered = data.filter(item =>
+    let filtered = data.filter(item =>
       Object.values(item).some(value => 
         value.toLowerCase().includes(filterText.toLowerCase())
       )
     )
+
+    // Apply advanced filters
+    filtered = filtered.filter(item => {
+      return Object.entries(filters).every(([key, config]) => {
+        if (!config) return true
+        const value = item[key as keyof DataItem]
+        switch (config.operator) {
+          case 'contains':
+            return value.toLowerCase().includes(config.value.toLowerCase())
+          case 'equals':
+            return value.toLowerCase() === config.value.toLowerCase()
+          case 'greater':
+            return parseFloat(value) > parseFloat(config.value)
+          case 'less':
+            return parseFloat(value) < parseFloat(config.value)
+          default:
+            return true
+        }
+      })
+    })
 
     return [...filtered].sort((a, b) => {
       const aValue = a[sortColumn]
@@ -69,7 +96,7 @@ export default function DataTable() {
       if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1
       return 0
     })
-  }, [data, filterText, sortColumn, sortDirection])
+  }, [data, filterText, sortColumn, sortDirection, filters])
 
   const parentRef = React.useRef<HTMLDivElement>(null)
 
@@ -96,6 +123,21 @@ export default function DataTable() {
     return <ChevronsUpDown className="w-4 h-4 opacity-0 group-hover:opacity-100" />
   }
 
+  const handleFilterChange = (column: keyof DataItem, value: string, operator: 'contains' | 'equals' | 'greater' | 'less') => {
+    setFilters(prev => ({
+      ...prev,
+      [column]: { value, operator }
+    }))
+  }
+
+  const removeFilter = (column: keyof DataItem) => {
+    setFilters(prev => {
+      const newFilters = { ...prev }
+      delete newFilters[column]
+      return newFilters
+    })
+  }
+
   if (isLoading && data.length === 0) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -107,11 +149,11 @@ export default function DataTable() {
 
   return (
     <div className="container mx-auto p-4 space-y-4">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex-1 max-w-sm relative">
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="w-full md:w-auto flex-1 relative">
           <Input
             type="text"
-            placeholder="Filter data"
+            placeholder="Search all columns"
             onChange={(e) => debouncedFilter(e.target.value)}
             className="pr-8"
           />
@@ -121,15 +163,75 @@ export default function DataTable() {
             </div>
           )}
         </div>
-        <div className="text-sm text-muted-foreground">
-          {processedData.length.toLocaleString()} items
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">
+            {processedData.length.toLocaleString()} items
+          </span>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 border-dashed">
+                <Filter className="mr-2 h-4 w-4" />
+                Add filter
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-full">
+              <div className="grid gap-4">
+                <div className="space-y-2">
+                  <h4 className="font-medium leading-none">Filters</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Add filters to refine results
+                  </p>
+                </div>
+                <div className="grid gap-2">
+                  {Object.keys(data[0] || {}).map((column) => (
+                    <div key={column} className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor={column}>{column}</Label>
+                      <Input
+                        id={column}
+                        placeholder="Value"
+                        className="col-span-2"
+                        onChange={(e) => handleFilterChange(column as keyof DataItem, e.target.value, 'contains')}
+                      />
+                      <select
+                        onChange={(e) => handleFilterChange(column as keyof DataItem, filters[column as keyof DataItem]?.value || '', e.target.value as any)}
+                        className="p-2 border rounded"
+                      >
+                        <option value="contains">Contains</option>
+                        <option value="equals">Equals</option>
+                        <option value="greater">Greater</option>
+                        <option value="less">Less</option>
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
-      <div className="rounded-md border">
-        <div className="w-full">
+      {Object.entries(filters).length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          {Object.entries(filters).map(([column, config]) => (
+            <div key={column} className="flex items-center bg-muted text-muted-foreground rounded-full px-3 py-1 text-sm">
+              <span>{column}: {config?.operator} {config?.value}</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-auto p-0 ml-2"
+                onClick={() => removeFilter(column as keyof DataItem)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="rounded-md border overflow-hidden">
+        <div className="w-full overflow-auto">
           <div className="border-b">
-            <div className="grid grid-cols-9 bg-muted/50">
+            <div className="grid grid-cols-2 md:grid-cols-9 bg-muted/50">
               {Object.keys(data[0] || {}).map((key) => (
                 <div
                   key={key}
@@ -162,21 +264,18 @@ export default function DataTable() {
                 return (
                   <div
                     key={virtualRow.index}
-                    className="absolute top-0 left-0 w-full grid grid-cols-9 hover:bg-muted/50 transition-colors border-b"
+                    className="absolute top-0 left-0 w-full grid grid-cols-2 md:grid-cols-9 hover:bg-muted/50 transition-colors border-b"
                     style={{
                       height: `${virtualRow.size}px`,
                       transform: `translateY(${virtualRow.start}px)`
                     }}
                   >
-                    <div className="p-3 truncate">{item.Domain}</div>
-                    <div className="p-3 truncate">{item["Niche 1"]}</div>
-                    <div className="p-3 truncate">{item["Niche 2"]}</div>
-                    <div className="p-3 truncate">{item.Traffic}</div>
-                    <div className="p-3 truncate">{item.DR}</div>
-                    <div className="p-3 truncate">{item.DA}</div>
-                    <div className="p-3 truncate">{item.Language}</div>
-                    <div className="p-3 truncate">{item.Price}</div>
-                    <div className="p-3 truncate">{item["Spam Score"]}</div>
+                    {Object.entries(item).map(([key, value]) => (
+                      <div key={key} className="p-3 truncate">
+                        <span className="font-medium md:hidden">{key}: </span>
+                        {value}
+                      </div>
+                    ))}
                   </div>
                 )
               })}
