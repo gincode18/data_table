@@ -4,14 +4,42 @@
 
 A high-performance, interactive data table built with React and TypeScript. Designed to efficiently handle and display large datasets (36,000+ rows) with advanced features like virtualized scrolling, real-time filtering, and multi-column sorting.
 
-![Data Table Demo](https://data-table-ivory.vercel.app/) <!-- Replace with your actual screenshot -->
-
 ## 🎥 Live Demo
 
 - [Live Application](https://your-demo-url.vercel.app)
 - Demo Credentials:
   - Username: `demo`
   - Password: `demo`
+
+
+
+## Video Demo
+
+[https://youtu.be/qKoCsVzLUaU](https://youtu.be/qKoCsVzLUaU)
+
+Watch the video demo to see the chatbot in action and learn how to integrate it into your online store.
+
+---
+
+## Screenshots
+
+### Login
+![Login](https://github.com/user-attachments/assets/9adaec12-7979-4ca8-a0a8-7323b7f13343)  
+*Initial Login page*
+
+### Data Table
+![DataTable](https://github.com/user-attachments/assets/924be4da-5844-4077-8eef-3a9d82692f39)  
+*Data Table with 36000 rows*
+
+### Filter Table 
+![Filter Table](https://github.com/user-attachments/assets/05b0a860-20bd-4013-b130-1ae1bba40124)  
+*Table to apply Filters*
+
+### Right Click
+![Right Click](https://github.com/user-attachments/assets/0720e5d3-3139-4fb9-aed5-eed65e2c2c86)  
+*Right Click to Download and Copy rows*
+
+---
 
 ## ✨ Key Features
 
