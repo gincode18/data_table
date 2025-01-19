@@ -11,6 +11,7 @@ import Papa from 'papaparse'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { useToast } from "@/hooks/use-toast"
+import { fetchGoogleSheetsData } from "@/lib/fetchGoogleSheets"
 
 interface DataItem {
   Domain: string
@@ -44,21 +45,42 @@ export default function DataTable() {
 
 
   useEffect(() => {
-    const fetchData = async () => {
+    const loadData = async () => {
       try {
-        const response = await fetch('/data.csv')
-        const csvData = await response.text()
-        const results = Papa.parse(csvData, { header: true, skipEmptyLines: true })
-        setData(results.data as DataItem[])
-        setIsLoading(false)
-      } catch (error) {
-        console.error('Error reading CSV file:', error)
-        setIsLoading(false)
+        setIsLoading(true);
+        const sheetsData = await fetchGoogleSheetsData();
+        setData(sheetsData);
+      } catch (err) {
+        toast({
+          title: "Error",
+          description: "Failed to load data from Google Sheets",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
       }
-    }
+    };
 
-    fetchData()
-  }, [])
+    loadData();
+  }, [toast]);
+
+  //offline 
+  // useEffect(() => {
+  //   const fetchData = async () => {
+  //     try {
+  //       const response = await fetch('/data.csv')
+  //       const csvData = await response.text()
+  //       const results = Papa.parse(csvData, { header: true, skipEmptyLines: true })
+  //       setData(results.data as DataItem[])
+  //       setIsLoading(false)
+  //     } catch (error) {
+  //       console.error('Error reading CSV file:', error)
+  //       setIsLoading(false)
+  //     }
+  //   }
+
+  //   fetchData()
+  // }, [])
 
   const debouncedFilter = useCallback(
     debounce((value: string) => {
@@ -374,6 +396,19 @@ export default function DataTable() {
                           <Copy className="mr-2 h-4 w-4" />
                           Copy row
                         </ContextMenuItem>
+                        {selectedRows.length > 0 && (
+                          <>
+                            <ContextMenuItem onClick={() => copyRowsToClipboard(selectedRows)}>
+                              <Copy className="mr-2 h-4 w-4" />
+                              Copy {selectedRows.length} selected row(s)
+                            </ContextMenuItem>
+                            <ContextMenuItem onClick={() => downloadCSV()}>
+                              <Download className="mr-2 h-4 w-4" />
+                              Download CSV {selectedRows.length} selected row(s)
+                            </ContextMenuItem>
+                          </>
+                        )}
+
                       </ContextMenuContent>
                     </ContextMenu>
                   )
@@ -386,19 +421,6 @@ export default function DataTable() {
         <div className="text-sm text-muted-foreground text-center">
           Scroll to load more rows
         </div>
-
-        {selectedRows.length > 0 && (
-          <div className="fixed bottom-4 right-4 space-x-2">
-            <Button onClick={() => copyRowsToClipboard(selectedRows)}>
-              <Copy className="mr-2 h-4 w-4" />
-              Copy {selectedRows.length} selected row(s)
-            </Button>
-            <Button onClick={downloadCSV}>
-              <Download className="mr-2 h-4 w-4" />
-              Download CSV
-            </Button>
-          </div>
-        )}
       </div>
     </TooltipProvider>
   )
