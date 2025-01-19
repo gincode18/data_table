@@ -1,14 +1,10 @@
-import { useState } from 'react'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+'use client'
+
+import React, { useState, useMemo, useCallback } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
+import debounce from 'lodash.debounce'
 import { Input } from "@/components/ui/input"
-import { ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react'
+import { ChevronDown, ChevronUp, ChevronsUpDown, Loader2 } from 'lucide-react'
 
 interface DataItem {
   Domain: string
@@ -22,32 +18,70 @@ interface DataItem {
   SpamScore: string
 }
 
-const ITEMS_PER_PAGE = 10
+// Generate large dataset for testing
+const generateLargeDataset = (count: number): DataItem[] => {
+  const baseData = [
+    { Domain: 'zzoomit.com', Niche1: 'Business', Niche2: 'General', Traffic: '164', DR: '50', DA: '61', Language: 'English', Price: '$19.95', SpamScore: '9%' },
+    { Domain: 'zzatem.com', Niche1: 'All', Niche2: 'Niches', Traffic: '10,775', DR: '38', DA: '28', Language: 'English', Price: '$39.90', SpamScore: '9%' },
+    { Domain: 'zyynor.com', Niche1: 'Business', Niche2: 'General', Traffic: 'Not provided', DR: '43', DA: '31', Language: 'English', Price: '$19.95', SpamScore: '1%' },
+    { Domain: 'zywaz.com', Niche1: 'Business', Niche2: 'Finance', Traffic: 'Not provided', DR: '61', DA: '36', Language: 'English', Price: '$19.95', SpamScore: '1%' },
+    { Domain: 'zyusepedia.com', Niche1: 'Technology', Niche2: '', Traffic: '172', DR: '19', DA: '37', Language: 'English', Price: '$19.95', SpamScore: '1%' }
+  ]
 
-const sampleData: DataItem[] = [
-  { Domain: 'zzoomit.com', Niche1: 'Business', Niche2: 'General', Traffic: '164', DR: '50', DA: '61', Language: 'English', Price: '$19.95', SpamScore: '9%' },
-  { Domain: 'zzatem.com', Niche1: 'All', Niche2: 'Niches', Traffic: '10,775', DR: '38', DA: '28', Language: 'English', Price: '$39.90', SpamScore: '9%' },
-  { Domain: 'zyynor.com', Niche1: 'Business', Niche2: 'General', Traffic: 'Not provided', DR: '43', DA: '31', Language: 'English', Price: '$19.95', SpamScore: '1%' },
-  { Domain: 'zywaz.com', Niche1: 'Business', Niche2: 'Finance', Traffic: 'Not provided', DR: '61', DA: '36', Language: 'English', Price: '$19.95', SpamScore: '1%' },
-  { Domain: 'zyusepedia.com', Niche1: 'Technology', Niche2: '', Traffic: '172', DR: '19', DA: '37', Language: 'English', Price: '$19.95', SpamScore: '1%' },
-  { Domain: 'zysp-jj.com', Niche1: 'All', Niche2: 'Niches', Traffic: 'Not provided', DR: '45', DA: '54', Language: 'English', Price: '$19.95', SpamScore: '8%' },
-  { Domain: 'zyotto.com', Niche1: 'General', Niche2: '', Traffic: 'Not provided', DR: '42', DA: '62', Language: 'English', Price: '$179.55', SpamScore: '3%' },
-  { Domain: 'zynrewards.co.uk', Niche1: 'Business', Niche2: 'Health', Traffic: '181', DR: '19', DA: '37', Language: 'English', Price: '$19.95', SpamScore: '4%' },
-  { Domain: 'zyne.fr', Niche1: 'Business', Niche2: 'General', Traffic: '770', DR: '31', DA: '20', Language: 'French', Price: '$139.65', SpamScore: '1%' },
-  { Domain: 'zylantex.com', Niche1: 'All', Niche2: 'Niches', Traffic: 'Not provided', DR: '28', DA: '64', Language: 'English', Price: '$19.95', SpamScore: '4%' },
-  { Domain: 'zyczenia-urodzinowe', Niche1: 'Fashion', Niche2: 'For', Traffic: 'Not provided', DR: '28', DA: '64', Language: 'English', Price: '$19.95', SpamScore: '4%' },
-  { Domain: 'zyciepw.pl', Niche1: 'Culture', Niche2: 'Entertainment', Traffic: '29,651', DR: '39', DA: '35', Language: 'Polish', Price: '$442.89', SpamScore: '1%' },
-  { Domain: 'zxq.net', Niche1: 'Business', Niche2: 'Entertainment', Traffic: 'Not provided', DR: '68', DA: '71', Language: 'English', Price: '$139.65', SpamScore: '3%' },
-  { Domain: 'zwnews.com', Niche1: 'Business', Niche2: 'News', Traffic: '6,772', DR: '49', DA: '52', Language: 'English', Price: '$19.95', SpamScore: '16%' },
-  { Domain: 'zwicky.de', Niche1: 'Sports', Niche2: 'Travelling', Traffic: 'Not provided', DR: '33', DA: '54', Language: 'German', Price: '$59.85', SpamScore: '5%' }
-]
+  const result: DataItem[] = []
+  for (let i = 0; i < count; i++) {
+    const baseDomain = baseData[i % baseData.length]
+    result.push({
+      ...baseDomain,
+      Domain: `${baseDomain.Domain.split('.')[0]}-${i}.com`
+    })
+  }
+  return result
+}
+
+const INITIAL_DATA = generateLargeDataset(10000)
 
 export default function DataTable() {
-  const [data] = useState<DataItem[]>(sampleData)
+  const [data] = useState<DataItem[]>(INITIAL_DATA)
   const [sortColumn, setSortColumn] = useState<keyof DataItem>('Domain')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   const [filterText, setFilterText] = useState('')
-  const [currentPage, setCurrentPage] = useState(1)
+  const [isLoading, setIsLoading] = useState(false)
+
+  // Debounced filter handler
+  const debouncedFilter = useCallback(
+    debounce((value: string) => {
+      setIsLoading(true)
+      setFilterText(value)
+      setTimeout(() => setIsLoading(false), 300)
+    }, 300),
+    [setIsLoading, setFilterText]
+  )
+
+  // Memoized filtered and sorted data
+  const processedData = useMemo(() => {
+    const filtered = data.filter(item =>
+      item.Domain.toLowerCase().includes(filterText.toLowerCase())
+    )
+
+    return [...filtered].sort((a, b) => {
+      const aValue = a[sortColumn]
+      const bValue = b[sortColumn]
+
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1
+      return 0
+    })
+  }, [data, filterText, sortColumn, sortDirection])
+
+  const parentRef = React.useRef<HTMLDivElement>(null)
+
+  const rowVirtualizer = useVirtualizer({
+    count: processedData.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 45,
+    overscan: 5
+  })
 
   const handleSort = (column: keyof DataItem) => {
     if (column === sortColumn) {
@@ -65,85 +99,88 @@ export default function DataTable() {
     return <ChevronsUpDown className="w-4 h-4 opacity-0 group-hover:opacity-100" />
   }
 
-  const filteredData = data.filter(item =>
-    item.Domain.toLowerCase().includes(filterText.toLowerCase())
-  )
-
-  const sortedData = [...filteredData].sort((a, b) => {
-    const aValue = a[sortColumn]
-    const bValue = b[sortColumn]
-    
-    if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1
-    if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1
-    return 0
-  })
-
-  const totalPages = Math.ceil(sortedData.length / ITEMS_PER_PAGE)
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
-  const paginatedData = sortedData.slice(startIndex, startIndex + ITEMS_PER_PAGE)
-
   return (
     <div className="container mx-auto p-4 space-y-4">
-      <Input
-        type="text"
-        placeholder="Filter by Domain Name"
-        value={filterText}
-        onChange={(e) => setFilterText(e.target.value)}
-        className="max-w-sm"
-      />
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex-1 max-w-sm relative">
+          <Input
+            type="text"
+            placeholder="Filter by Domain Name"
+            onChange={(e) => debouncedFilter(e.target.value)}
+            className="pr-8"
+          />
+          {isLoading && (
+            <div className="absolute right-2 top-1/2 -translate-y-1/2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+            </div>
+          )}
+        </div>
+        <div className="text-sm text-muted-foreground">
+          {processedData.length.toLocaleString()} items
+        </div>
+      </div>
+
       <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
+        <div className="w-full">
+          <div className="border-b">
+            <div className="grid grid-cols-9 bg-muted/50">
               {Object.keys(data[0] || {}).map((key) => (
-                <TableHead
+                <div
                   key={key}
-                  className="group cursor-pointer"
+                  className="p-3 text-sm font-medium text-left cursor-pointer group hover:bg-muted/50 transition-colors"
                   onClick={() => handleSort(key as keyof DataItem)}
                 >
                   <div className="flex items-center gap-1">
                     {key}
                     {getSortIcon(key as keyof DataItem)}
                   </div>
-                </TableHead>
+                </div>
               ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {paginatedData.map((item, index) => (
-              <TableRow key={index}>
-                <TableCell className="font-medium">{item.Domain}</TableCell>
-                <TableCell>{item.Niche1}</TableCell>
-                <TableCell>{item.Niche2}</TableCell>
-                <TableCell>{item.Traffic}</TableCell>
-                <TableCell>{item.DR}</TableCell>
-                <TableCell>{item.DA}</TableCell>
-                <TableCell>{item.Language}</TableCell>
-                <TableCell>{item.Price}</TableCell>
-                <TableCell>{item.SpamScore}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </div>
+          </div>
+
+          <div
+            ref={parentRef}
+            className="w-full overflow-auto"
+            style={{ height: '600px' }}
+          >
+            <div
+              style={{
+                height: `${rowVirtualizer.getTotalSize()}px`,
+                width: '100%',
+                position: 'relative'
+              }}
+            >
+              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const item = processedData[virtualRow.index]
+                return (
+                  <div
+                    key={virtualRow.index}
+                    className="absolute top-0 left-0 w-full grid grid-cols-9 hover:bg-muted/50 transition-colors border-b"
+                    style={{
+                      height: `${virtualRow.size}px`,
+                      transform: `translateY(${virtualRow.start}px)`
+                    }}
+                  >
+                    <div className="p-3 truncate">{item.Domain}</div>
+                    <div className="p-3 truncate">{item.Niche1}</div>
+                    <div className="p-3 truncate">{item.Niche2}</div>
+                    <div className="p-3 truncate">{item.Traffic}</div>
+                    <div className="p-3 truncate">{item.DR}</div>
+                    <div className="p-3 truncate">{item.DA}</div>
+                    <div className="p-3 truncate">{item.Language}</div>
+                    <div className="p-3 truncate">{item.Price}</div>
+                    <div className="p-3 truncate">{item.SpamScore}</div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
       </div>
-      <div className="flex items-center justify-end space-x-2">
-        <button
-          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-          disabled={currentPage === 1}
-          className="px-3 py-2 rounded border disabled:opacity-50"
-        >
-          Previous
-        </button>
-        <span className="text-sm text-gray-600">
-          Page {currentPage} of {totalPages}
-        </span>
-        <button
-          onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-          disabled={currentPage === totalPages}
-          className="px-3 py-2 rounded border disabled:opacity-50"
-        >
-          Next
-        </button>
+
+      <div className="text-sm text-muted-foreground text-center">
+        Scroll to load more rows
       </div>
     </div>
   )
