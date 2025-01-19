@@ -287,7 +287,7 @@ export default function DataTable() {
           <div className="w-full overflow-auto">
             <div className="border-b sticky top-0 bg-background z-10">
               <div className="grid grid-cols-[25px_2fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr] bg-muted/50">
-                <div className="p-3 text-sm font-medium text-left">
+                <div className="flex">
                   <Button
                     variant="ghost"
                     size="sm"
