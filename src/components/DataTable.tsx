@@ -6,7 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useVirtualizer } from '@tanstack/react-virtual'
 import debounce from 'lodash.debounce'
-import { ChevronDown, ChevronUp, ChevronsUpDown, Copy, Filter, Loader2, X } from 'lucide-react'
+import { CheckSquare, ChevronDown, ChevronUp, ChevronsUpDown, Copy, Download, Filter, Loader2, Square, X } from 'lucide-react'
 import Papa from 'papaparse'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
@@ -41,6 +41,7 @@ export default function DataTable() {
   const [selectedRows, setSelectedRows] = useState<number[]>([])
 
   const { toast } = useToast()
+
 
   useEffect(() => {
     const fetchData = async () => {
@@ -154,6 +155,14 @@ export default function DataTable() {
     })
   }
 
+  const handleSelectAll = () => {
+    if (selectedRows.length === processedData.length) {
+      setSelectedRows([])
+    } else {
+      setSelectedRows(processedData.map((_, index) => index))
+    }
+  }
+
   const copyRowsToClipboard = (indices: number[]) => {
     const rowsToCopy = indices.map(index => processedData[index])
     const csvContent = Papa.unparse(rowsToCopy)
@@ -165,6 +174,22 @@ export default function DataTable() {
     }).catch(err => {
       console.error('Failed to copy: ', err)
     })
+  }
+
+  const downloadCSV = () => {
+    const rowsToDownload = selectedRows.map(index => processedData[index])
+    const csvContent = Papa.unparse(rowsToDownload)
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob)
+      link.setAttribute('href', url)
+      link.setAttribute('download', 'selected_data.csv')
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    }
   }
 
   if (isLoading && data.length === 0) {
@@ -260,8 +285,22 @@ export default function DataTable() {
 
         <div className="rounded-md border overflow-hidden">
           <div className="w-full overflow-auto">
-            <div className="border-b">
-              <div className="grid grid-cols-2 md:grid-cols-9 bg-muted/50">
+            <div className="border-b sticky top-0 bg-background z-10">
+              <div className="grid grid-cols-[25px_2fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr] bg-muted/50">
+                <div className="p-3 text-sm font-medium text-left">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleSelectAll}
+                    className="h-auto p-1"
+                  >
+                    {selectedRows.length === processedData.length ? (
+                      <CheckSquare className="h-4 w-4" />
+                    ) : (
+                      <Square className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
                 {Object.keys(data[0] || {}).map((key) => (
                   <div
                     key={key}
@@ -296,18 +335,30 @@ export default function DataTable() {
                     <ContextMenu key={virtualRow.index}>
                       <ContextMenuTrigger>
                         <div
-                          className={`absolute top-0 left-0 w-full grid grid-cols-2 md:grid-cols-9 transition-colors border-b ${isSelected ? 'bg-muted' : 'hover:bg-muted/50'}`}
+                          className={`absolute top-0 left-0 w-full grid grid-cols-[25px_2fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr] transition-colors border-b ${isSelected ? 'bg-muted' : 'hover:bg-muted/50'}`}
                           style={{
                             height: `${virtualRow.size}px`,
                             transform: `translateY(${virtualRow.start}px)`
                           }}
-                          onClick={() => handleRowSelection(virtualRow.index)}
                         >
+                          <div className="p-2 flex items-center justify-center">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRowSelection(virtualRow.index)}
+                              className="h-auto p-1"
+                            >
+                              {isSelected ? (
+                                <CheckSquare className="h-4 w-4" />
+                              ) : (
+                                <Square className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
                           {Object.entries(item).map(([key, value]) => (
                             <Tooltip key={key}>
                               <TooltipTrigger asChild>
-                                <div className="p-3 truncate">
-                                  <span className="font-medium md:hidden">{key}: </span>
+                                <div className="p-2 truncate">
                                   {value}
                                 </div>
                               </TooltipTrigger>
@@ -337,10 +388,14 @@ export default function DataTable() {
         </div>
 
         {selectedRows.length > 0 && (
-          <div className="fixed bottom-4 right-4">
+          <div className="fixed bottom-4 right-4 space-x-2">
             <Button onClick={() => copyRowsToClipboard(selectedRows)}>
               <Copy className="mr-2 h-4 w-4" />
               Copy {selectedRows.length} selected row(s)
+            </Button>
+            <Button onClick={downloadCSV}>
+              <Download className="mr-2 h-4 w-4" />
+              Download CSV
             </Button>
           </div>
         )}
